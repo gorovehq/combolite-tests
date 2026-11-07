@@ -1,30 +1,66 @@
 # Combolite Testing Framework
-# Unified test definitions, labels, and CTest integration
-
-# Test labels:
-#   core   - Core C99 engine unit tests, sweeps, and fault devices
-#   accel  - CUDA, Vulkan, and device acceleration tests
-#   studio - Combolite Studio Python unittests
-#   demo   - GutenFree Diet demo smoke tests
+# Unified test definitions, labels, and CTest integration across submodules:
+#   - combolite-core
+#   - combolite-accelerator
+#   - combolite-studio
+#   - combolite-demo
+#   - combolite-tests
 
 function(cdb_add_test name)
-  cmake_parse_arguments(PARSE_ARGV 1 ARG "" "LABEL" "SOURCES;LIBS;DEFINITIONS;PROPERTIES")
+  cmake_parse_arguments(PARSE_ARGV 1 ARG "" "SUBMODULE;LABEL;TEST_NAME" "SOURCES;LIBS;DEFINITIONS;PROPERTIES;ENVIRONMENT")
   if(NOT ARG_SOURCES)
     set(ARG_SOURCES ${name}.c)
   endif()
+  if(NOT ARG_SUBMODULE)
+    set(ARG_SUBMODULE "combolite-core")
+  endif()
   if(NOT ARG_LABEL)
-    set(ARG_LABEL "core")
+    set(ARG_LABEL "${ARG_SUBMODULE}")
+  endif()
+  if(NOT ARG_TEST_NAME)
+    set(ARG_TEST_NAME "${ARG_SUBMODULE}:${name}")
   endif()
 
-  add_executable(${name} ${ARG_SOURCES})
-  target_link_libraries(${name} PRIVATE ${ARG_LIBS} unity)
-  target_compile_definitions(${name} PRIVATE CDB_TEST_TMPDIR="${CMAKE_CURRENT_BINARY_DIR}" ${ARG_DEFINITIONS})
-  if(CDB_WARNINGS)
-    target_compile_options(${name} PRIVATE ${CDB_WARNINGS})
+  if(NOT TARGET ${name})
+    add_executable(${name} ${ARG_SOURCES})
+    target_link_libraries(${name} PRIVATE ${ARG_LIBS} unity)
+    target_compile_definitions(${name} PRIVATE CDB_TEST_TMPDIR="${CMAKE_CURRENT_BINARY_DIR}" ${ARG_DEFINITIONS})
+    if(CDB_WARNINGS)
+      target_compile_options(${name} PRIVATE ${CDB_WARNINGS})
+    endif()
   endif()
 
-  add_test(NAME ${name} COMMAND ${name})
-  set_tests_properties(${name} PROPERTIES LABELS "${ARG_LABEL}" ${ARG_PROPERTIES})
+  add_test(NAME "${ARG_TEST_NAME}" COMMAND ${name})
+  set_tests_properties("${ARG_TEST_NAME}" PROPERTIES LABELS "${ARG_SUBMODULE};${ARG_LABEL}")
+  if(ARG_PROPERTIES)
+    set_tests_properties("${ARG_TEST_NAME}" PROPERTIES ${ARG_PROPERTIES})
+  endif()
+  if(ARG_ENVIRONMENT)
+    set_property(TEST "${ARG_TEST_NAME}" PROPERTY ENVIRONMENT ${ARG_ENVIRONMENT})
+  endif()
+endfunction()
+
+function(cdb_add_test_variant test_name target_name)
+  cmake_parse_arguments(PARSE_ARGV 2 ARG "" "SUBMODULE;LABEL" "COMMAND;PROPERTIES;ENVIRONMENT")
+  if(NOT ARG_SUBMODULE)
+    set(ARG_SUBMODULE "combolite-core")
+  endif()
+  if(NOT ARG_LABEL)
+    set(ARG_LABEL "${ARG_SUBMODULE}")
+  endif()
+  if(NOT ARG_COMMAND)
+    set(ARG_COMMAND ${target_name})
+  endif()
+
+  set(full_test_name "${ARG_SUBMODULE}:${test_name}")
+  add_test(NAME "${full_test_name}" COMMAND ${ARG_COMMAND})
+  set_tests_properties("${full_test_name}" PROPERTIES LABELS "${ARG_SUBMODULE};${ARG_LABEL}")
+  if(ARG_PROPERTIES)
+    set_tests_properties("${full_test_name}" PROPERTIES ${ARG_PROPERTIES})
+  endif()
+  if(ARG_ENVIRONMENT)
+    set_property(TEST "${full_test_name}" PROPERTY ENVIRONMENT ${ARG_ENVIRONMENT})
+  endif()
 endfunction()
 
 function(cdb_add_bench name)
